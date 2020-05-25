@@ -1,8 +1,12 @@
 import matplotlib.pyplot as plt
 import struct
-
+import os
 import numpy as np
+from PIL import Image
 
+import random
+
+PATH_TO_TEXTURES = "textures"
 THRESHOLD = 10
 
 def binary_threshold(x):
@@ -82,10 +86,8 @@ def fill_bitmap(arr):
                 explore((x, y), _set)
                 disjoint_sets.append(_set)
     
-    print(disjoint_sets)
     def key(_set):
         coord = list(_set)[0]
-        print(binary_set[coord[1]][coord[0]])
         if binary_set[coord[1]][coord[0]] == 255:
             return len(_set)
         return 0
@@ -114,7 +116,37 @@ def fill_bitmap(arr):
                     result[coord[1]][coord[0]] = 255
 
     #show_bitmap(plt_arr) #debug array
-    show_bitmap_sbs(arr, result)
+    #show_bitmap_sbs(arr, result)
+    return result
+
+def load_texture(filename):
+    im = Image.open(filename)
+    arr = np.array(im)
+    return arr
+
+def add_to_filled(filled, texture, offset=(0,0)):
+    result = np.zeros(filled.shape)
+    ry = 0
+    rx = 0
+    for y in range(offset[0], filled.shape[0]+offset[0]):
+        rx = 0
+        for x in range(offset[1], filled.shape[1]+offset[1]):
+            if (filled[ry][rx] == 255):
+                result[ry][rx] = texture[y][x]
+            rx += 1
+        ry += 1
+    return result
+
+def interpolate_textures(t1, t2):
+    result = np.zeros(t1.shape)
+    for y in range(t1.shape[0]):
+        for x in range(t1.shape[1]):
+            val = int((int(t1[y][x]) + int(t2[y][x]))/2) 
+            #Watch out for overflow
+            #   convert to int explicitly bfore interpolation
+            result[y][x] = val
+    show_bitmap_sbs(t1, t2)
+    show_bitmap(result)
     return result
 
 def show_bitmap(arr1):
@@ -127,8 +159,20 @@ def show_bitmap_sbs(arr1, arr2):
     plt.imshow([np.concatenate([arr1[i], arr2[i]]) for i in range(arr1.shape[0])], cmap='gray')
     plt.show()
 
-imgs = read_idx("train-images-idx3-ubyte")
-labels = read_idx("train-labels-idx1-ubyte")
+def test():
+    imgs = read_idx("train-images-idx3-ubyte")
+    labels = read_idx("train-labels-idx1-ubyte")
+    textures = [os.path.join(PATH_TO_TEXTURES, i) for i in os.listdir(PATH_TO_TEXTURES)]
+    print(textures)
+    
 
-for i in range(100):
-    fill_bitmap(imgs[i])
+    for i in range(100):
+        i1 = add_to_filled(
+            fill_bitmap(imgs[i]),
+            interpolate_textures(
+                load_texture("textures/zigzag3_small.png"),
+                load_texture("textures/stripes1_small.png")
+            ),
+            offset = (0, 0)
+        )
+        show_bitmap(i1)
