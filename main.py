@@ -6,6 +6,8 @@ import sys
 import numpy as np
 from PIL import Image
 import random
+from pycallgraph import PyCallGraph
+from pycallgraph.output import GraphvizOutput
 
 random.seed(1)
 
@@ -194,13 +196,13 @@ def show_bitmap_sbs(arr1, arr2):
     plt.show()
 
 def add_noise(arr, intensity=0):
-    NOISE_LEVEL = 64
+    NOISE_LEVEL = 30
     result = np.zeros(arr.shape)
     for y in range(arr.shape[0]):
         for x in range(arr.shape[1]):
             delta = int(intensity * random.randint(-NOISE_LEVEL, NOISE_LEVEL))
-            val = arr[y][x] + delta
-            result[y][x] = max(0, min(255, val))
+            val = max(0, min(255, arr[y][x] + delta))
+            result[y][x] = val
     return result
 
 class TexturedFMNIST():
@@ -210,6 +212,7 @@ class TexturedFMNIST():
 
 
         self.textures = [load_texture(os.path.join(texture_dir, i)) for i in os.listdir(texture_dir)]
+        print("TexturedFMNIST initialized")
 
 
     def build_class(self, class_num, texture_choices=[], texture_interpolation=0, texture_rescale=True, texture_aug=True, aug_intensity=0.5):
@@ -218,29 +221,44 @@ class TexturedFMNIST():
         texture_aug: whether to add some noise to texture scaling and orientation before application
         '''
         # Loop over self.get_textured_sample randomly sampling noise for texture application if texture_aug is True
-        return #[np arrays of images with textures applied]
+        result = []
+        for index, img in enumerate(self.imgs):
+            if self.labels[index] == class_num:
+                i0, label = self.get_textured_sample(0, texture_choices, texture_interpolation, texture_rescale, texture_aug, aug_intensity)
+                result.append(i0)
+                show_bitmap(i0)
 
-    def get_textured_sample(self, img_index, sample_fname, texture_choices=[], texture_interpolation=0, texture_rescale=True, texture_aug=True):
+            print("{}/{} done".format(index, len(self.labels)))
+        return result
+
+    def get_textured_sample(self, img_index, texture_choices=[], texture_interpolation=0, texture_rescale=True, texture_aug=True, aug_intensity=0.5):
         offset = (0, 0)
         noise = 0
+
         if texture_aug:
             offset = (random.randint(0, 4), random.randint(0, 4))
-            noise = 1
-            
-        texture = interpolate_textures([
-            add_noise(scale_texture(random.choice(self.textures)), noise),
-            add_noise(scale_texture(random.choice(self.textures)), noise)
-        ])
+            noise = aug_intensity
+        
+        t1 = random.choice(texture_choices)
+        t2 = random.choice(texture_choices)
 
-        i1 = add_to_filled(
-            fill_bitmap(self.imgs[img_index]), texture, offset
-        )
+        if texture_rescale:
+            t1 = scale_texture(t1, random.random())
+            t2 = scale_texture(t2, random.random())
+        else:
+            t1 = scale_texture(t1, 1)
+            t2 = scale_texture(t2, 1)
+
+        texture = None
+        if texture_interpolation:
+            texture = add_noise(interpolate_textures([t1, t2]), noise)
+        else:
+            texture = add_noise(t1, noise)
+
+        i1 = add_to_filled(fill_bitmap(self.imgs[img_index]), texture, offset)
         return i1, self.labels[img_index]
 
-#with PyCallGraph(output=GraphvizOutput()):
- #   test()
+
 def test():
     tf = TexturedFMNIST()
-    for i in range(1000):
-        show_bitmap(tf.get_textured_sample(0, False, False)[0])
-        print(i)
+    tf.build_class(0, tf.textures, False, False, False)
